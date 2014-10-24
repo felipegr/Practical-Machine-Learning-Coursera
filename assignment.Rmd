@@ -1,0 +1,98 @@
+<!-- Make sure that the knitr package is installed and loaded. -->
+<!-- For more info on the package options see http://yihui.name/knitr/options -->
+
+<!-- Replace below with the title of your project -->
+### Pratical Machine Learning - Assignment
+
+<!-- Enter the code required to load your data in the space below. The data will be loaded but the line of code won't show up in your write up (echo=FALSE) in order to save space-->
+```{r message=FALSE, echo=FALSE}
+library(caret)
+library(Hmisc)
+library(ggplot2)
+```
+
+<!-- In the remainder of the document, add R code chunks as needed -->
+
+### Building the model:
+
+The first step was to load the data:
+
+```{r message=FALSE, results='hide'}
+original_training <- csv.get("pml-training.csv")
+```
+
+After that I took a look at the summary of the data and noticed that a lot of variables had missing values and/or were not relevant to our case, because they contained just names or dates, so I removed them from the data.
+
+```{r message=FALSE, results='hide'}
+summary(original_training)
+
+remove <- c("X", "user.name", "raw.timestamp.part.1", "raw.timestamp.part.2",
+            "cvtd.timestamp", "new.window", "num.window", "kurtosis.roll.belt",
+            "kurtosis.picth.belt", "kurtosis.yaw.belt", "skewness.roll.belt",
+            "skewness.roll.belt.1", "skewness.yaw.belt", "max.roll.belt",
+            "max.picth.belt", "max.yaw.belt", "min.roll.belt", "min.pitch.belt",
+            "min.yaw.belt", "amplitude.roll.belt", "amplitude.pitch.belt",
+            "amplitude.yaw.belt", "var.total.accel.belt", "avg.roll.belt",
+            "stddev.roll.belt", "var.roll.belt", "avg.pitch.belt", "stddev.pitch.belt",
+            "var.pitch.belt", "avg.yaw.belt", "stddev.yaw.belt", "var.yaw.belt",
+            "var.accel.arm", "avg.roll.arm", "stddev.roll.arm", "var.roll.arm",
+            "avg.pitch.arm", "stddev.pitch.arm", "var.pitch.arm", "avg.yaw.arm",
+            "stddev.yaw.arm", "var.yaw.arm", "kurtosis.roll.arm", "kurtosis.picth.arm",
+            "kurtosis.yaw.arm", "skewness.roll.arm", "skewness.pitch.arm",
+            "skewness.yaw.arm", "max.roll.arm", "max.picth.arm", "max.yaw.arm",
+            "min.roll.arm", "min.pitch.arm", "min.yaw.arm", "amplitude.roll.arm",
+            "amplitude.pitch.arm", "amplitude.yaw.arm", "kurtosis.roll.dumbbell",
+            "kurtosis.picth.dumbbell", "kurtosis.yaw.dumbbell", "skewness.roll.dumbbell",
+            "skewness.pitch.dumbbell", "skewness.yaw.dumbbell", "max.roll.dumbbell",
+            "max.picth.dumbbell", "max.yaw.dumbbell", "min.roll.dumbbell",
+            "min.pitch.dumbbell", "min.yaw.dumbbell", "amplitude.roll.dumbbell", 
+            "amplitude.pitch.dumbbell", "amplitude.yaw.dumbbell", "var.accel.dumbbell",
+            "avg.roll.dumbbell", "stddev.roll.dumbbell", "var.roll.dumbbell",
+            "avg.pitch.dumbbell", "stddev.pitch.dumbbell", "var.pitch.dumbbell",
+            "avg.yaw.dumbbell", "stddev.yaw.dumbbell", "var.yaw.dumbbell",
+            "kurtosis.roll.forearm", "kurtosis.picth.forearm", "kurtosis.yaw.forearm",
+            "skewness.roll.forearm", "skewness.pitch.forearm", "skewness.yaw.forearm",
+            "max.roll.forearm", "max.picth.forearm", "max.yaw.forearm", "min.roll.forearm",
+            "min.pitch.forearm", "min.yaw.forearm", "amplitude.roll.forearm",
+            "amplitude.pitch.forearm", "amplitude.yaw.forearm", "var.accel.forearm",
+            "avg.roll.forearm", "stddev.roll.forearm", "var.roll.forearm",
+            "avg.pitch.forearm", "stddev.pitch.forearm", "var.pitch.forearm",
+            "avg.yaw.forearm", "stddev.yaw.forearm", "var.yaw.forearm"
+            )
+
+modified_training <- original_training[, names(original_training)[names(original_training) %nin% remove]]
+```
+
+Then I checked for correlation between variables and noticed that a lot of them were highly correlated, so I decided to use preprocessing in my model.
+
+```{r}
+M <- abs(cor(modified_training[,-53]))
+diag(M) <- 0
+which(M > 0.8,arr.ind=T)
+```
+
+Next step was to set a seed, separate my data into a training set and a test set and build the model. I chose to preprocess the data using the PCA method and to make a 10-fold cross validation using the "train" function options.
+
+```{r message=FALSE, results='hide'}
+set.seed(1235)
+
+inTraining <- createDataPartition(modified_training$classe, p = 0.75, list = FALSE)
+training <- modified_training[inTraining, ]
+testing <- modified_training[-inTraining, ]
+
+modelFit <- train(training$classe ~ ., method="gbm", data=training,
+                  preProcess="pca", trControl = trainControl(method = "cv",
+                                                             number = 10,
+                                                             repeats = 10))
+```
+```{r echo=FALSE}
+modelFit
+```
+
+The accuracy, in this case, is an optmistic measurement. To analyse better my model I then checked it against the testing data.
+
+```{r}
+confusionMatrix(testing$classe,predict(modelFit,testing))
+```
+
+With these results I expect the out of sample error to be about 20%. I guess this is not a bad number.
